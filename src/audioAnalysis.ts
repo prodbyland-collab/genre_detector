@@ -153,6 +153,8 @@ async function analyzeAudioFileWithBeatlyze(file: File, options: AnalyzeOptions)
   const formData = new FormData()
   formData.append('audio', file)
 
+  reportProgress(options, 15, 'Checking provider', 'Confirming backend analysis service is online')
+  await assertProviderHealth()
   reportProgress(options, 35, 'Provider analysis', 'Beatlyze is detecting tempo, key, mood, energy, and genre')
   const response = await fetch('/api/analyze', {
     method: 'POST',
@@ -160,8 +162,10 @@ async function analyzeAudioFileWithBeatlyze(file: File, options: AnalyzeOptions)
   })
 
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null
-    throw new Error(payload?.error || `Analysis provider failed (${response.status}).`)
+    const payload = (await response.json().catch(() => null)) as { error?: string; detail?: string; providerResponse?: unknown } | null
+    const detail = payload?.detail ? ` ${payload.detail}` : ''
+    const providerResponse = payload?.providerResponse ? ` ${JSON.stringify(payload.providerResponse)}` : ''
+    throw new Error(`${payload?.error || `Analysis provider failed (${response.status}).`}${detail}${providerResponse}`.trim())
   }
 
   reportProgress(options, 82, 'Rendering results', 'Building waveform and artist direction')
@@ -206,6 +210,25 @@ async function analyzeAudioFileWithBeatlyze(file: File, options: AnalyzeOptions)
     ...features,
     ...genreResult,
     artists: matchArtists(features, genreResult),
+  }
+}
+
+async function assertProviderHealth() {
+  try {
+    const response = await fetch('/api/health')
+    if (!response.ok) {
+      throw new Error(`Backend health check failed (${response.status}).`)
+    }
+
+    const health = (await response.json()) as { beatlyzeConfigured?: boolean }
+    if (!health.beatlyzeConfigured) {
+      throw new Error('Beatlyze API key is missing. Add BEATLYZE_API_KEY in Bolt environment variables and restart the preview.')
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Backend analysis server is not available: ${error.message}`, { cause: error })
+    }
+    throw error
   }
 }
 

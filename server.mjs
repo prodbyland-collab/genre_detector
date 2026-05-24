@@ -51,6 +51,14 @@ const vibeByGenre = {
   Rock: 'driving',
 }
 
+app.get('/api/health', (_request, response) => {
+  response.json({
+    ok: true,
+    beatlyzeConfigured: Boolean(process.env.BEATLYZE_API_KEY),
+    huggingFaceConfigured: Boolean(process.env.HF_TOKEN),
+  })
+})
+
 app.post('/api/analyze', analysisUpload.single('audio'), async (request, response) => {
   const token = process.env.BEATLYZE_API_KEY
   if (!token) {
@@ -65,7 +73,7 @@ app.post('/api/analyze', analysisUpload.single('audio'), async (request, respons
 
   try {
     const formData = new FormData()
-    formData.append('file', new Blob([request.file.buffer], { type: request.file.mimetype || 'application/octet-stream' }), request.file.originalname || 'track.wav')
+    formData.append('file', new File([request.file.buffer], request.file.originalname || 'track.mp3', { type: request.file.mimetype || 'application/octet-stream' }))
 
     const submitResponse = await fetch(`${beatlyzeBaseUrl}/analyze/upload`, {
       method: 'POST',
@@ -77,7 +85,10 @@ app.post('/api/analyze', analysisUpload.single('audio'), async (request, respons
     })
 
     if (!submitResponse.ok) {
-      response.status(submitResponse.status).json({ error: await submitResponse.text() })
+      response.status(submitResponse.status).json({
+        error: 'Beatlyze rejected the upload request.',
+        detail: await submitResponse.text(),
+      })
       return
     }
 
@@ -177,7 +188,7 @@ async function pollBeatlyzeAnalysis(token, jobId) {
     })
 
     if (!resultResponse.ok) {
-      throw new Error(await resultResponse.text())
+      throw new Error(`Beatlyze result request failed: ${await resultResponse.text()}`)
     }
 
     const payload = await resultResponse.json()
