@@ -57,6 +57,7 @@ const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', '
 const analysisStartSeconds = 20
 const analysisDurationSeconds = 55
 const genreSnippetSeconds = 30
+const essentiaTempoSeconds = 12
 
 const artistProfiles = [
   { name: 'Drake', lane: 'melodic rap', tempo: 82, energy: 46, brightness: 42, bass: 64 },
@@ -128,7 +129,7 @@ async function classifyGenre(audioBlob: Blob, features: AudioFeatures, options: 
 
   return {
     ...classifyTrack(features),
-    genreEngine: 'Local vibe model',
+    genreEngine: `Local vibe model + ${features.engine}`,
     genreLabels: [],
   }
 }
@@ -197,14 +198,14 @@ async function extractFeatures(samples: Float32Array, sampleRate: number, option
   const bassWeight = clamp(Math.round(average(bassRatios) * 100), 0, 100)
   const fallbackTempo = estimateTempo(energies, targetRate / hop)
   const dynamicRange = clamp(Math.round((percentile(energies, 0.9) - percentile(energies, 0.2)) * 220), 0, 100)
-  reportProgress(options, 58, 'Running Essentia.js', 'Estimating tempo and musical key')
+  reportProgress(options, 58, 'Running Essentia.js', 'Estimating tempo with a quick rhythm pass')
   const essentiaAnalysis = await analyzeWithEssentia(samples, sampleRate)
   const tempo = essentiaAnalysis.tempo || fallbackTempo
   const danceability = clamp(Math.round(100 - Math.abs(tempo - 118) * 0.8 + bassWeight * 0.18 - dynamicRange * 0.1), 0, 100)
 
   return {
     tempo,
-    key: essentiaAnalysis.key || estimateKey(downsampled, targetRate),
+    key: estimateKey(downsampled, targetRate),
     energy,
     danceability,
     brightness,
@@ -219,31 +220,14 @@ async function analyzeWithEssentia(samples: Float32Array, sampleRate: number) {
   try {
     const { getEssentia } = await import('./essentiaClient')
     const essentia = await getEssentia()
-    const vector = essentia.arrayToVector(samples) as { delete?: () => void }
+    const tempoSamples = sliceByDuration(samples, sampleRate, essentiaTempoSeconds)
+    const vector = essentia.arrayToVector(tempoSamples) as { delete?: () => void }
     try {
       const rhythm = essentia.RhythmExtractor2013(vector, 208, 'multifeature', 40)
-      const key = essentia.KeyExtractor(
-        vector,
-        true,
-        4096,
-        4096,
-        12,
-        3500,
-        60,
-        25,
-        0.2,
-        'edma',
-        sampleRate,
-        0.0001,
-        440,
-        'cosine',
-        'hann',
-      )
-      const keyName = key.key && key.scale ? `${key.key} ${key.scale}` : ''
       return {
         tempo: normalizeTempo(Math.round(rhythm.bpm ?? 0)),
-        key: keyName,
-        engine: 'Essentia.js',
+        key: '',
+        engine: 'Essentia.js BPM',
       }
     } finally {
       vector.delete?.()

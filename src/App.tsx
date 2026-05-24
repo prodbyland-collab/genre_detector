@@ -206,7 +206,7 @@ function Results({ result }: { result: AnalysisResult }) {
         <Metric icon={<CircleGauge />} label="Tempo" value={`${result.tempo} BPM`} />
         <Metric icon={<KeyRound />} label="Key" value={result.key} />
         <Metric icon={<Sparkles />} label="Energy" value={`${result.energy}%`} />
-        <Metric icon={<AudioLines />} label={result.engine} value={`${result.danceability}%`} />
+        <Metric icon={<AudioLines />} label="Dance" value={`${result.danceability}%`} />
       </div>
 
       {result.genreLabels.length > 0 && (
