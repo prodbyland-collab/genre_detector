@@ -70,7 +70,7 @@ app.post('/api/analyze', analysisUpload.single('audio'), async (request, respons
     const submitResponse = await fetch(`${beatlyzeBaseUrl}/analyze/upload`, {
       method: 'POST',
       headers: {
-        'X-API-Key': token,
+        ...beatlyzeAuthHeaders(token),
         'Idempotency-Key': `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
       body: formData,
@@ -82,9 +82,18 @@ app.post('/api/analyze', analysisUpload.single('audio'), async (request, respons
     }
 
     const submitted = await submitResponse.json()
-    const jobId = submitted.job_id
+    const immediateResult = extractBeatlyzeResult(submitted)
+    if (immediateResult) {
+      response.json(normalizeBeatlyzeResult(immediateResult))
+      return
+    }
+
+    const jobId = submitted.job_id || submitted.jobId || submitted.id || submitted.analysis_id || submitted.analysisId
     if (!jobId) {
-      response.status(502).json({ error: 'Beatlyze did not return a job_id.' })
+      response.status(502).json({
+        error: 'Beatlyze did not return a job id.',
+        providerResponse: redactProviderPayload(submitted),
+      })
       return
     }
 
@@ -164,9 +173,7 @@ async function pollBeatlyzeAnalysis(token, jobId) {
 
   while (Date.now() - startedAt < beatlyzePollTimeoutMs) {
     const resultResponse = await fetch(`${beatlyzeBaseUrl}/analysis/${jobId}`, {
-      headers: {
-        'X-API-Key': token,
-      },
+      headers: beatlyzeAuthHeaders(token),
     })
 
     if (!resultResponse.ok) {
@@ -174,9 +181,15 @@ async function pollBeatlyzeAnalysis(token, jobId) {
     }
 
     const payload = await resultResponse.json()
-    if (payload.status === 'completed') return payload.result
-    if (payload.status === 'failed') {
-      throw new Error(payload.error || 'Beatlyze analysis failed.')
+    const status = String(payload.status || payload.state || '').toLowerCase()
+    const result = extractBeatlyzeResult(payload)
+
+    if (result || ['completed', 'complete', 'done', 'succeeded', 'success'].includes(status)) {
+      return result || payload
+    }
+
+    if (['failed', 'error', 'cancelled', 'canceled'].includes(status)) {
+      throw new Error(payload.error || payload.message || 'Beatlyze analysis failed.')
     }
 
     await new Promise((resolve) => setTimeout(resolve, 2500))
@@ -186,27 +199,79 @@ async function pollBeatlyzeAnalysis(token, jobId) {
 }
 
 function normalizeBeatlyzeResult(result) {
-  const genres = Array.isArray(result.genre_suggestions) ? result.genre_suggestions : []
-  const moods = Array.isArray(result.mood_tags) ? result.mood_tags : []
-  const genre = normalizeGenre(genres[0] || 'Unknown')
-  const scale = result.scale ? titleCase(String(result.scale)) : ''
+  const rawGenres = firstArray(result.genre_suggestions, result.genreSuggestions, result.genres, result.genre_hints, result.genreHints)
+  const rawMoods = firstArray(result.mood_tags, result.moodTags, result.moods, result.mood_hints, result.moodHints)
+  const genres = rawGenres.map(labelFromMaybeScoredValue)
+  const moods = rawMoods.map(labelFromMaybeScoredValue)
+  const genre = normalizeGenre(labelFromMaybeScoredValue(result.genre) || genres[0] || 'Unknown')
+  const scale = result.scale || result.mode ? titleCase(String(result.scale || result.mode)) : ''
+  const bpm = numberFrom(result.bpm, result.tempo, result.beats_per_minute, result.beatsPerMinute)
+  const keyConfidence = confidenceFrom(result.key_confidence, result.keyConfidence)
+  const bpmConfidence = confidenceFrom(result.bpm_confidence, result.bpmConfidence, result.tempo_confidence, result.tempoConfidence)
+  const genreConfidence = confidenceFrom(result.genre_confidence, result.genreConfidence, result.confidence)
 
   return {
     provider: 'Beatlyze',
     genre,
-    confidence: Math.round((result.genre_confidence ?? 0.7) * 100),
-    tempo: Math.round(result.bpm ?? 0),
-    tempoConfidence: Math.round((result.bpm_confidence ?? 0) * 100),
-    key: result.key_notation || [result.key, scale].filter(Boolean).join(' ') || 'Unknown',
-    keyConfidence: Math.round((result.key_confidence ?? 0) * 100),
-    energy: Math.round((result.energy ?? 0) * 100),
-    danceability: Math.round((result.danceability ?? 0) * 100),
-    mood: moods[0] || 'balanced',
+    confidence: genreConfidence || 70,
+    tempo: Math.round(bpm || 0),
+    tempoConfidence: bpmConfidence || 0,
+    key: result.key_notation || result.keyNotation || [result.key, scale].filter(Boolean).join(' ') || 'Unknown',
+    keyConfidence,
+    energy: confidenceFrom(result.energy) || 0,
+    danceability: confidenceFrom(result.danceability) || 0,
+    mood: labelFromMaybeScoredValue(result.mood) || moods[0] || 'balanced',
     genreLabels: genres.map((item) => titleCase(String(item))),
     moodLabels: moods.map((item) => titleCase(String(item))),
-    loudness: result.loudness_lufs ?? null,
-    duration: result.duration_seconds ?? null,
+    loudness: numberFrom(result.loudness_lufs, result.loudnessLufs, result.lufs, result.loudness) ?? null,
+    duration: numberFrom(result.duration_seconds, result.durationSeconds, result.duration) ?? null,
   }
+}
+
+function beatlyzeAuthHeaders(token) {
+  return {
+    Authorization: `Bearer ${token}`,
+    'X-API-Key': token,
+  }
+}
+
+function extractBeatlyzeResult(payload) {
+  if (!payload || typeof payload !== 'object') return null
+  return payload.result || payload.analysis || payload.data?.result || payload.data?.analysis || payload.data || null
+}
+
+function redactProviderPayload(payload) {
+  return JSON.parse(
+    JSON.stringify(payload, (key, value) => {
+      if (key.toLowerCase().includes('token') || key.toLowerCase().includes('key')) return '[redacted]'
+      return value
+    }),
+  )
+}
+
+function firstArray(...values) {
+  return values.find((value) => Array.isArray(value)) || []
+}
+
+function labelFromMaybeScoredValue(value) {
+  if (!value) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'object') return value.label || value.name || value.genre || value.mood || ''
+  return String(value)
+}
+
+function numberFrom(...values) {
+  for (const value of values) {
+    const numericValue = Number(value)
+    if (Number.isFinite(numericValue)) return numericValue
+  }
+  return null
+}
+
+function confidenceFrom(...values) {
+  const value = numberFrom(...values)
+  if (value === null) return 0
+  return Math.round(value <= 1 ? value * 100 : value)
 }
 
 app.use(express.static(path.join(__dirname, 'dist')))
