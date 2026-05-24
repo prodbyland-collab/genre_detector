@@ -35,6 +35,8 @@ $env:BEATLYZE_API_KEY="bz_your_key_here"; npm run dev
 
 The Beatlyze key must be set as a server environment variable. Do not paste it into source code or commit it to GitHub.
 
+The local API server listens on `API_PORT`, defaulting to `3001`. Vite proxies `/api/*` to that port during development.
+
 ## Build And Run
 
 ```bash

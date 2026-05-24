@@ -18,7 +18,7 @@ const analysisUpload = multer({
 })
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const port = Number(process.env.PORT || 3001)
+const port = Number(process.env.API_PORT || (process.env.NODE_ENV === 'production' ? process.env.PORT : undefined) || 3001)
 const hfModel = process.env.HF_MODEL || 'gastonduault/music-classifier'
 const hfTimeoutMs = 35_000
 const beatlyzeBaseUrl = 'https://api.beatlyze.dev/v1'
