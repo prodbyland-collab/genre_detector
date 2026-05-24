@@ -34,6 +34,25 @@ type AudioFeatures = {
   waveform: number[]
 }
 
+type GenreResult = {
+  genre: string
+  confidence: number
+  mood: string
+  genreEngine: string
+  genreLabels: string[]
+}
+
+type ArtistProfile = {
+  name: string
+  lane: string
+  genres: string[]
+  moods: string[]
+  tempo: number
+  energy: number
+  brightness: number
+  bass: number
+}
+
 export type AnalyzeOptions = {
   useHuggingFace?: boolean
   onProgress?: (progress: AnalysisProgress) => void
@@ -58,19 +77,31 @@ const analysisStartSeconds = 20
 const analysisDurationSeconds = 55
 const genreSnippetSeconds = 30
 
-const artistProfiles = [
-  { name: 'Drake', lane: 'melodic rap', tempo: 82, energy: 46, brightness: 42, bass: 64 },
-  { name: 'Travis Scott', lane: 'dark trap', tempo: 140, energy: 72, brightness: 38, bass: 78 },
-  { name: 'SZA', lane: 'alt R&B', tempo: 92, energy: 38, brightness: 48, bass: 45 },
-  { name: 'The Weeknd', lane: 'cinematic pop/R&B', tempo: 116, energy: 66, brightness: 67, bass: 52 },
-  { name: 'Future', lane: 'street trap', tempo: 146, energy: 70, brightness: 41, bass: 82 },
-  { name: 'Billie Eilish', lane: 'minimal dark pop', tempo: 78, energy: 30, brightness: 31, bass: 58 },
-  { name: 'Bad Bunny', lane: 'reggaeton', tempo: 96, energy: 72, brightness: 60, bass: 70 },
-  { name: 'Dua Lipa', lane: 'dance pop', tempo: 124, energy: 78, brightness: 74, bass: 55 },
-  { name: 'Kendrick Lamar', lane: 'left-field hip hop', tempo: 94, energy: 68, brightness: 58, bass: 60 },
-  { name: 'Rema', lane: 'afrobeats', tempo: 104, energy: 64, brightness: 66, bass: 54 },
-  { name: 'Metro Boomin', lane: 'producer tag trap', tempo: 148, energy: 76, brightness: 36, bass: 86 },
-  { name: 'Tyla', lane: 'amapiano pop', tempo: 112, energy: 58, brightness: 62, bass: 68 },
+const artistProfiles: ArtistProfile[] = [
+  { name: 'Drake', lane: 'melodic rap / R&B rap', genres: ['Hip-Hop / Rap', 'R&B', 'Trap'], moods: ['moody', 'balanced', 'rhythmic'], tempo: 82, energy: 46, brightness: 42, bass: 64 },
+  { name: 'Travis Scott', lane: 'psychedelic trap', genres: ['Trap', 'Hip-Hop / Rap'], moods: ['heavy', 'moody', 'high-energy'], tempo: 140, energy: 72, brightness: 38, bass: 78 },
+  { name: 'SZA', lane: 'alt R&B', genres: ['R&B', 'Alt Pop'], moods: ['moody', 'soulful', 'smooth'], tempo: 92, energy: 38, brightness: 48, bass: 45 },
+  { name: 'The Weeknd', lane: 'cinematic pop/R&B', genres: ['Pop', 'R&B', 'Dance / House'], moods: ['bright', 'cinematic', 'moody'], tempo: 116, energy: 66, brightness: 67, bass: 52 },
+  { name: 'Future', lane: 'street trap', genres: ['Trap', 'Hip-Hop / Rap'], moods: ['heavy', 'rhythmic', 'moody'], tempo: 146, energy: 70, brightness: 41, bass: 82 },
+  { name: 'Billie Eilish', lane: 'minimal dark pop', genres: ['Alt Pop', 'Pop'], moods: ['moody', 'cinematic'], tempo: 78, energy: 30, brightness: 31, bass: 58 },
+  { name: 'Bad Bunny', lane: 'reggaeton urbano', genres: ['Reggaeton', 'Pop'], moods: ['bright', 'rhythmic', 'high-energy'], tempo: 96, energy: 72, brightness: 60, bass: 70 },
+  { name: 'Dua Lipa', lane: 'dance pop', genres: ['Pop', 'Dance / House', 'Disco'], moods: ['bright', 'high-energy'], tempo: 124, energy: 78, brightness: 74, bass: 55 },
+  { name: 'Kendrick Lamar', lane: 'left-field hip hop', genres: ['Hip-Hop / Rap'], moods: ['rhythmic', 'driving', 'balanced'], tempo: 94, energy: 68, brightness: 58, bass: 60 },
+  { name: 'Rema', lane: 'afrobeats / afro-pop', genres: ['Afrobeats', 'Pop'], moods: ['bright', 'laid-back', 'rhythmic'], tempo: 104, energy: 64, brightness: 66, bass: 54 },
+  { name: 'Metro Boomin', lane: 'producer tag trap', genres: ['Trap'], moods: ['heavy', 'moody'], tempo: 148, energy: 76, brightness: 36, bass: 86 },
+  { name: 'Tyla', lane: 'amapiano pop', genres: ['Afrobeats', 'Pop', 'Dance / House'], moods: ['smooth', 'bright', 'laid-back'], tempo: 112, energy: 58, brightness: 62, bass: 68 },
+  { name: 'Chris Brown', lane: 'club R&B / pop rap', genres: ['R&B', 'Pop', 'Dance / House'], moods: ['bright', 'smooth', 'rhythmic'], tempo: 104, energy: 62, brightness: 58, bass: 54 },
+  { name: 'Ariana Grande', lane: 'vocal pop/R&B', genres: ['Pop', 'R&B'], moods: ['bright', 'smooth'], tempo: 112, energy: 58, brightness: 72, bass: 42 },
+  { name: 'Doja Cat', lane: 'rap-pop hybrid', genres: ['Pop', 'Hip-Hop / Rap', 'Dance / House'], moods: ['bright', 'rhythmic', 'high-energy'], tempo: 116, energy: 70, brightness: 70, bass: 58 },
+  { name: 'Lil Baby', lane: 'melodic street rap', genres: ['Hip-Hop / Rap', 'Trap'], moods: ['rhythmic', 'balanced'], tempo: 136, energy: 64, brightness: 48, bass: 72 },
+  { name: '21 Savage', lane: 'minimal dark trap', genres: ['Trap', 'Hip-Hop / Rap'], moods: ['heavy', 'moody'], tempo: 142, energy: 58, brightness: 32, bass: 80 },
+  { name: 'Playboi Carti', lane: 'rage / high-energy trap', genres: ['Trap'], moods: ['high-energy', 'heavy'], tempo: 152, energy: 86, brightness: 62, bass: 84 },
+  { name: 'Central Cee', lane: 'UK drill rap', genres: ['Hip-Hop / Rap', 'Trap'], moods: ['rhythmic', 'heavy'], tempo: 142, energy: 72, brightness: 52, bass: 76 },
+  { name: 'Burna Boy', lane: 'afrofusion', genres: ['Afrobeats', 'Reggae', 'Pop'], moods: ['laid-back', 'rhythmic', 'organic'], tempo: 102, energy: 62, brightness: 56, bass: 58 },
+  { name: 'Tems', lane: 'soulful afro-R&B', genres: ['R&B', 'Afrobeats'], moods: ['soulful', 'smooth', 'moody'], tempo: 88, energy: 36, brightness: 44, bass: 48 },
+  { name: 'Peso Pluma', lane: 'regional urbano', genres: ['Country', 'Pop'], moods: ['organic', 'driving'], tempo: 108, energy: 60, brightness: 58, bass: 38 },
+  { name: 'Post Malone', lane: 'pop rap / alt rock', genres: ['Pop', 'Hip-Hop / Rap', 'Rock'], moods: ['balanced', 'driving', 'moody'], tempo: 98, energy: 58, brightness: 54, bass: 55 },
+  { name: 'Olivia Rodrigo', lane: 'pop rock', genres: ['Pop', 'Rock', 'Alt Pop'], moods: ['driving', 'high-energy'], tempo: 132, energy: 78, brightness: 72, bass: 44 },
 ]
 
 export async function analyzeAudioFile(file: File, options: AnalyzeOptions = {}): Promise<AnalysisResult> {
@@ -96,7 +127,7 @@ export async function analyzeAudioFile(file: File, options: AnalyzeOptions = {})
     return {
       ...features,
       ...genreResult,
-      artists: matchArtists(features),
+      artists: matchArtists(features, genreResult),
     }
   } finally {
     await audioContext.close()
@@ -327,31 +358,51 @@ function classifyTrack(features: AudioFeatures) {
   return { genre: best.genre, confidence, mood }
 }
 
-function matchArtists(features: AudioFeatures): ArtistMatch[] {
+function matchArtists(features: AudioFeatures, genreResult: GenreResult): ArtistMatch[] {
   return artistProfiles
     .map((artist) => {
+      const genreBoost = artist.genres.includes(genreResult.genre) ? 24 : hasRelatedGenre(artist.genres, genreResult.genre) ? 10 : -12
+      const moodBoost = artist.moods.includes(genreResult.mood) ? 10 : 0
       const distance =
         Math.abs(features.tempo - artist.tempo) * 0.42 +
         Math.abs(features.energy - artist.energy) * 0.3 +
         Math.abs(features.brightness - artist.brightness) * 0.24 +
         Math.abs(features.bassWeight - artist.bass) * 0.26
-      const fit = clamp(Math.round(100 - distance), 52, 98)
+      const fit = clamp(Math.round(86 - distance + genreBoost + moodBoost), 38, 98)
       return {
         name: artist.name,
         fit,
         lane: artist.lane,
-        reason: buildArtistReason(features, artist),
+        reason: buildArtistReason(features, artist, genreResult),
       }
     })
     .sort((a, b) => b.fit - a.fit)
     .slice(0, 4)
 }
 
-function buildArtistReason(features: AudioFeatures, artist: (typeof artistProfiles)[number]) {
+function buildArtistReason(features: AudioFeatures, artist: ArtistProfile, genreResult: GenreResult) {
   const tempoNote = features.tempo >= 120 ? 'fast bounce' : features.tempo >= 95 ? 'mid-tempo pocket' : 'slow pocket'
   const toneNote = features.brightness > 62 ? 'bright top end' : features.brightness < 40 ? 'darker tone' : 'balanced tone'
   const bassNote = features.bassWeight > artist.bass ? 'extra low-end weight' : 'controlled low end'
-  return `${tempoNote}, ${toneNote}, ${bassNote}`
+  const genreNote = artist.genres.includes(genreResult.genre) ? `${genreResult.genre} lane` : artist.genres[0]
+  return `${genreNote}, ${tempoNote}, ${toneNote}, ${bassNote}`
+}
+
+function hasRelatedGenre(artistGenres: string[], detectedGenre: string) {
+  const related: Record<string, string[]> = {
+    Trap: ['Hip-Hop / Rap'],
+    'Hip-Hop / Rap': ['Trap', 'R&B'],
+    'R&B': ['Pop', 'Hip-Hop / Rap', 'Afrobeats'],
+    Pop: ['R&B', 'Dance / House', 'Alt Pop'],
+    Afrobeats: ['Reggaeton', 'Pop', 'R&B'],
+    Reggaeton: ['Afrobeats', 'Pop'],
+    'Dance / House': ['Pop', 'Disco'],
+    'Alt Pop': ['Pop', 'R&B'],
+    Rock: ['Pop', 'Alt Pop'],
+    Country: ['Pop', 'Rock'],
+  }
+
+  return artistGenres.some((genre) => related[detectedGenre]?.includes(genre))
 }
 
 function buildWaveform(samples: Float32Array, points: number) {
