@@ -36,6 +36,13 @@ type AudioFeatures = {
 
 export type AnalyzeOptions = {
   useHuggingFace?: boolean
+  onProgress?: (progress: AnalysisProgress) => void
+}
+
+export type AnalysisProgress = {
+  percent: number
+  stage: string
+  detail: string
 }
 
 type AudioContextConstructor = typeof AudioContext
@@ -71,15 +78,21 @@ export async function analyzeAudioFile(file: File, options: AnalyzeOptions = {})
   if (!AudioContextClass) {
     throw new Error('This browser does not support Web Audio analysis.')
   }
+  reportProgress(options, 5, 'Preparing audio', 'Reading uploaded file')
   const audioContext = new AudioContextClass()
   try {
     const arrayBuffer = await file.arrayBuffer()
+    reportProgress(options, 16, 'Decoding audio', 'Converting file into waveform data')
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+    reportProgress(options, 30, 'Preparing preview', 'Selecting the strongest section for analysis')
     const mono = mixToMono(audioBuffer)
     const analysisSamples = sliceForAnalysis(mono, audioBuffer.sampleRate)
     const genreBlob = encodeWav(sliceByDuration(analysisSamples, audioBuffer.sampleRate, genreSnippetSeconds), audioBuffer.sampleRate)
-    const features = await extractFeatures(analysisSamples, audioBuffer.sampleRate)
+    reportProgress(options, 42, 'Extracting features', 'Measuring energy, brightness, bass, and rhythm')
+    const features = await extractFeatures(analysisSamples, audioBuffer.sampleRate, options)
+    reportProgress(options, 76, 'Classifying genre', 'Checking genre and vibe match')
     const genreResult = await classifyGenre(genreBlob, features, options)
+    reportProgress(options, 92, 'Matching artists', 'Finding artists that fit the track profile')
     return {
       ...features,
       ...genreResult,
@@ -88,6 +101,10 @@ export async function analyzeAudioFile(file: File, options: AnalyzeOptions = {})
   } finally {
     await audioContext.close()
   }
+}
+
+function reportProgress(options: AnalyzeOptions, percent: number, stage: string, detail: string) {
+  options.onProgress?.({ percent, stage, detail })
 }
 
 async function classifyGenre(audioBlob: Blob, features: AudioFeatures, options: AnalyzeOptions) {
@@ -142,7 +159,7 @@ function sliceByDuration(samples: Float32Array, sampleRate: number, seconds: num
   return samples.slice(0, Math.min(samples.length, sampleRate * seconds))
 }
 
-async function extractFeatures(samples: Float32Array, sampleRate: number): Promise<AudioFeatures> {
+async function extractFeatures(samples: Float32Array, sampleRate: number, options: AnalyzeOptions): Promise<AudioFeatures> {
   const targetRate = 11_025
   const downsampled = downsample(samples, sampleRate, targetRate)
   const frameSize = 1024
@@ -180,6 +197,7 @@ async function extractFeatures(samples: Float32Array, sampleRate: number): Promi
   const bassWeight = clamp(Math.round(average(bassRatios) * 100), 0, 100)
   const fallbackTempo = estimateTempo(energies, targetRate / hop)
   const dynamicRange = clamp(Math.round((percentile(energies, 0.9) - percentile(energies, 0.2)) * 220), 0, 100)
+  reportProgress(options, 58, 'Running Essentia.js', 'Estimating tempo and musical key')
   const essentiaAnalysis = await analyzeWithEssentia(samples, sampleRate)
   const tempo = essentiaAnalysis.tempo || fallbackTempo
   const danceability = clamp(Math.round(100 - Math.abs(tempo - 118) * 0.8 + bassWeight * 0.18 - dynamicRange * 0.1), 0, 100)

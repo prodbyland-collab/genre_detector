@@ -14,7 +14,7 @@ import {
   WandSparkles,
 } from 'lucide-react'
 import './App.css'
-import { type AnalysisResult, analyzeAudioFile } from './audioAnalysis'
+import { type AnalysisProgress, type AnalysisResult, analyzeAudioFile } from './audioAnalysis'
 
 const supportedFormats = 'MP3, WAV, M4A, AAC, OGG'
 
@@ -26,6 +26,7 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<AnalysisResult | null>(null)
+  const [progress, setProgress] = useState<AnalysisProgress | null>(null)
 
   const fileMeta = useMemo(() => {
     if (!file) return null
@@ -53,9 +54,14 @@ function App() {
     }
 
     setIsAnalyzing(true)
+    setProgress({ percent: 2, stage: 'Starting analysis', detail: 'Warming up the audio engine' })
     setError('')
     try {
-      const nextResult = await analyzeAudioFile(file, { useHuggingFace: true })
+      const nextResult = await analyzeAudioFile(file, {
+        useHuggingFace: true,
+        onProgress: setProgress,
+      })
+      setProgress({ percent: 100, stage: 'Analysis complete', detail: 'Rendering results' })
       setResult(nextResult)
     } catch (analysisError) {
       setError(analysisError instanceof Error ? analysisError.message : 'Could not analyze that audio file.')
@@ -137,24 +143,42 @@ function App() {
             </button>
             {error && <p className="error-text">{error}</p>}
           </div>
+
+          {isAnalyzing && progress && <ProgressBar progress={progress} />}
         </div>
 
         <div className="results-panel">
-          {result ? <Results result={result} /> : <EmptyState isAnalyzing={isAnalyzing} />}
+          {result ? <Results result={result} /> : <EmptyState isAnalyzing={isAnalyzing} progress={progress} />}
         </div>
       </section>
     </main>
   )
 }
 
-function EmptyState({ isAnalyzing }: { isAnalyzing: boolean }) {
+function EmptyState({ isAnalyzing, progress }: { isAnalyzing: boolean; progress: AnalysisProgress | null }) {
   return (
     <div className="empty-state">
       <div className="empty-visual">
         <AudioLines aria-hidden="true" />
       </div>
-      <h2>{isAnalyzing ? 'Listening closely...' : 'Your analysis will appear here.'}</h2>
-      <p>Tempo, key, genre, mood, and artist-fit suggestions update after the track is decoded.</p>
+      <h2>{isAnalyzing ? (progress?.stage ?? 'Listening closely...') : 'Your analysis will appear here.'}</h2>
+      <p>{isAnalyzing ? (progress?.detail ?? 'Processing the track') : 'Tempo, key, genre, mood, and artist-fit suggestions update after the track is decoded.'}</p>
+      {isAnalyzing && progress && <ProgressBar progress={progress} compact />}
+    </div>
+  )
+}
+
+function ProgressBar({ progress, compact = false }: { progress: AnalysisProgress; compact?: boolean }) {
+  return (
+    <div className={`progress-card ${compact ? 'is-compact' : ''}`} role="status" aria-live="polite">
+      <div className="progress-meta">
+        <span>{progress.stage}</span>
+        <strong>{Math.round(progress.percent)}%</strong>
+      </div>
+      <div className="progress-track" aria-label={`Analysis progress ${Math.round(progress.percent)}%`}>
+        <span style={{ width: `${progress.percent}%` }} />
+      </div>
+      {!compact && <p>{progress.detail}</p>}
     </div>
   )
 }
