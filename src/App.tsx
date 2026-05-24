@@ -26,6 +26,7 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<AnalysisResult | null>(null)
+  const [hfToken, setHfToken] = useState(() => sessionStorage.getItem('hf-token') ?? '')
 
   const fileMeta = useMemo(() => {
     if (!file) return null
@@ -55,7 +56,8 @@ function App() {
     setIsAnalyzing(true)
     setError('')
     try {
-      const nextResult = await analyzeAudioFile(file)
+      sessionStorage.setItem('hf-token', hfToken)
+      const nextResult = await analyzeAudioFile(file, { huggingFaceToken: hfToken })
       setResult(nextResult)
     } catch (analysisError) {
       setError(analysisError instanceof Error ? analysisError.message : 'Could not analyze that audio file.')
@@ -130,6 +132,17 @@ function App() {
             </div>
           )}
 
+          <label className="api-field">
+            <span>Hugging Face token for genre/vibe</span>
+            <input
+              type="password"
+              value={hfToken}
+              onChange={(event) => setHfToken(event.target.value)}
+              placeholder="hf_..."
+              autoComplete="off"
+            />
+          </label>
+
           <div className="action-row">
             <button className="primary-action" onClick={runAnalysis} disabled={isAnalyzing || !file}>
               {isAnalyzing ? <LoaderCircle className="spin" aria-hidden="true" /> : <WandSparkles aria-hidden="true" />}
@@ -166,7 +179,7 @@ function Results({ result }: { result: AnalysisResult }) {
         <div>
           <span className="eyebrow">
             <BadgeCheck aria-hidden="true" />
-            {result.confidence}% confidence · {result.engine}
+            {result.confidence}% confidence · {result.genreEngine}
           </span>
           <h2>{result.genre}</h2>
           <p>{result.mood} feel with {result.bassWeight}% low-end weight and {result.brightness}% brightness.</p>
@@ -182,8 +195,16 @@ function Results({ result }: { result: AnalysisResult }) {
         <Metric icon={<CircleGauge />} label="Tempo" value={`${result.tempo} BPM`} />
         <Metric icon={<KeyRound />} label="Key" value={result.key} />
         <Metric icon={<Sparkles />} label="Energy" value={`${result.energy}%`} />
-        <Metric icon={<AudioLines />} label="Dance" value={`${result.danceability}%`} />
+        <Metric icon={<AudioLines />} label={result.engine} value={`${result.danceability}%`} />
       </div>
+
+      {result.genreLabels.length > 0 && (
+        <div className="label-row">
+          {result.genreLabels.map((label) => (
+            <span key={label}>{label}</span>
+          ))}
+        </div>
+      )}
 
       <section className="artist-section">
         <div className="section-title">

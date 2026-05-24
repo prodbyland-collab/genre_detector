@@ -16,6 +16,8 @@ export type AnalysisResult = {
   brightness: number
   bassWeight: number
   engine: string
+  genreEngine: string
+  genreLabels: string[]
   waveform: number[]
   artists: ArtistMatch[]
 }
@@ -30,6 +32,11 @@ type AudioFeatures = {
   dynamicRange: number
   engine: string
   waveform: number[]
+}
+
+export type AnalyzeOptions = {
+  huggingFaceToken?: string
+  huggingFaceModel?: string
 }
 
 type AudioContextConstructor = typeof AudioContext
@@ -57,7 +64,7 @@ const artistProfiles = [
   { name: 'Tyla', lane: 'amapiano pop', tempo: 112, energy: 58, brightness: 62, bass: 68 },
 ]
 
-export async function analyzeAudioFile(file: File): Promise<AnalysisResult> {
+export async function analyzeAudioFile(file: File, options: AnalyzeOptions = {}): Promise<AnalysisResult> {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext
   if (!AudioContextClass) {
     throw new Error('This browser does not support Web Audio analysis.')
@@ -68,13 +75,40 @@ export async function analyzeAudioFile(file: File): Promise<AnalysisResult> {
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
     const mono = mixToMono(audioBuffer)
     const features = await extractFeatures(mono, audioBuffer.sampleRate)
+    const genreResult = await classifyGenre(file, features, options)
     return {
       ...features,
-      ...classifyTrack(features),
+      ...genreResult,
       artists: matchArtists(features),
     }
   } finally {
     await audioContext.close()
+  }
+}
+
+async function classifyGenre(file: File, features: AudioFeatures, options: AnalyzeOptions) {
+  if (options.huggingFaceToken?.trim()) {
+    try {
+      const { classifyGenreWithHuggingFace } = await import('./huggingFaceGenre')
+      const hfResult = await classifyGenreWithHuggingFace(file, options.huggingFaceToken, options.huggingFaceModel)
+      if (hfResult) {
+        return {
+          genre: hfResult.genre,
+          confidence: hfResult.confidence,
+          mood: hfResult.mood,
+          genreEngine: 'Hugging Face API',
+          genreLabels: hfResult.labels,
+        }
+      }
+    } catch (error) {
+      console.warn('Hugging Face genre classification failed, using local genre fallback.', error)
+    }
+  }
+
+  return {
+    ...classifyTrack(features),
+    genreEngine: 'Local vibe model',
+    genreLabels: [],
   }
 }
 
