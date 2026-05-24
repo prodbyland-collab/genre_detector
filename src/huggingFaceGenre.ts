@@ -37,42 +37,56 @@ const vibeByGenre: Record<string, string> = {
   Rock: 'driving',
 }
 
-export async function classifyGenreWithHuggingFace(file: File) {
+const genreTimeoutMs = 25_000
+
+export async function classifyGenreWithHuggingFace(audioBlob: Blob) {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), genreTimeoutMs)
   const formData = new FormData()
-  formData.append('audio', file)
+  formData.append('audio', audioBlob, 'genre-preview.wav')
 
-  const response = await fetch('/api/genre', {
-    method: 'POST',
-    body: formData,
-  })
+  try {
+    const response = await fetch('/api/genre', {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    })
 
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null
-    throw new Error(payload?.error || `Genre request failed (${response.status}).`)
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null
+      throw new Error(payload?.error || `Genre request failed (${response.status}).`)
+    }
+
+    const payload = (await response.json()) as HuggingFaceGenreResult | HuggingFaceLabel[] | { error?: string }
+    if (!Array.isArray(payload)) {
+      if ('genre' in payload) return payload
+      throw new Error(payload.error || 'Genre API returned an unexpected response.')
+    }
+
+    const sortedLabels = payload
+      .filter((item) => Number.isFinite(item.score))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+
+    const winner = sortedLabels[0]
+    if (!winner) return null
+
+    const genre = normalizeGenre(winner.label)
+
+    return {
+      genre,
+      confidence: Math.max(54, Math.min(96, Math.round(winner.score * 100))),
+      mood: vibeByGenre[genre] ?? 'balanced',
+      labels: sortedLabels.map((item) => `${normalizeGenre(item.label)} ${(item.score * 100).toFixed(0)}%`),
+    } satisfies HuggingFaceGenreResult
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Genre API timed out. Using local genre fallback.', { cause: error })
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
   }
-
-  const payload = (await response.json()) as HuggingFaceGenreResult | HuggingFaceLabel[] | { error?: string }
-  if (!Array.isArray(payload)) {
-    if ('genre' in payload) return payload
-    throw new Error(payload.error || 'Genre API returned an unexpected response.')
-  }
-
-  const sortedLabels = payload
-    .filter((item) => Number.isFinite(item.score))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
-
-  const winner = sortedLabels[0]
-  if (!winner) return null
-
-  const genre = normalizeGenre(winner.label)
-
-  return {
-    genre,
-    confidence: Math.max(54, Math.min(96, Math.round(winner.score * 100))),
-    mood: vibeByGenre[genre] ?? 'balanced',
-    labels: sortedLabels.map((item) => `${normalizeGenre(item.label)} ${(item.score * 100).toFixed(0)}%`),
-  } satisfies HuggingFaceGenreResult
 }
 
 function normalizeGenre(label: string) {

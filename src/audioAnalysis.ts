@@ -47,6 +47,9 @@ declare global {
 }
 
 const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+const analysisStartSeconds = 20
+const analysisDurationSeconds = 55
+const genreSnippetSeconds = 30
 
 const artistProfiles = [
   { name: 'Drake', lane: 'melodic rap', tempo: 82, energy: 46, brightness: 42, bass: 64 },
@@ -73,8 +76,10 @@ export async function analyzeAudioFile(file: File, options: AnalyzeOptions = {})
     const arrayBuffer = await file.arrayBuffer()
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
     const mono = mixToMono(audioBuffer)
-    const features = await extractFeatures(mono, audioBuffer.sampleRate)
-    const genreResult = await classifyGenre(file, features, options)
+    const analysisSamples = sliceForAnalysis(mono, audioBuffer.sampleRate)
+    const genreBlob = encodeWav(sliceByDuration(analysisSamples, audioBuffer.sampleRate, genreSnippetSeconds), audioBuffer.sampleRate)
+    const features = await extractFeatures(analysisSamples, audioBuffer.sampleRate)
+    const genreResult = await classifyGenre(genreBlob, features, options)
     return {
       ...features,
       ...genreResult,
@@ -85,11 +90,11 @@ export async function analyzeAudioFile(file: File, options: AnalyzeOptions = {})
   }
 }
 
-async function classifyGenre(file: File, features: AudioFeatures, options: AnalyzeOptions) {
+async function classifyGenre(audioBlob: Blob, features: AudioFeatures, options: AnalyzeOptions) {
   if (options.useHuggingFace) {
     try {
       const { classifyGenreWithHuggingFace } = await import('./huggingFaceGenre')
-      const hfResult = await classifyGenreWithHuggingFace(file)
+      const hfResult = await classifyGenreWithHuggingFace(audioBlob)
       if (hfResult) {
         return {
           genre: hfResult.genre,
@@ -124,6 +129,17 @@ function mixToMono(buffer: AudioBuffer) {
   }
 
   return mono
+}
+
+function sliceForAnalysis(samples: Float32Array, sampleRate: number) {
+  if (samples.length <= sampleRate * analysisDurationSeconds) return samples
+
+  const start = Math.min(sampleRate * analysisStartSeconds, Math.max(0, samples.length - sampleRate * analysisDurationSeconds))
+  return samples.slice(start, start + sampleRate * analysisDurationSeconds)
+}
+
+function sliceByDuration(samples: Float32Array, sampleRate: number, seconds: number) {
+  return samples.slice(0, Math.min(samples.length, sampleRate * seconds))
 }
 
 async function extractFeatures(samples: Float32Array, sampleRate: number): Promise<AudioFeatures> {
@@ -221,6 +237,42 @@ async function analyzeWithEssentia(samples: Float32Array, sampleRate: number) {
       key: '',
       engine: 'Fallback DSP',
     }
+  }
+}
+
+function encodeWav(samples: Float32Array, sampleRate: number) {
+  const headerSize = 44
+  const bytesPerSample = 2
+  const buffer = new ArrayBuffer(headerSize + samples.length * bytesPerSample)
+  const view = new DataView(buffer)
+
+  writeAscii(view, 0, 'RIFF')
+  view.setUint32(4, 36 + samples.length * bytesPerSample, true)
+  writeAscii(view, 8, 'WAVE')
+  writeAscii(view, 12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * bytesPerSample, true)
+  view.setUint16(32, bytesPerSample, true)
+  view.setUint16(34, 16, true)
+  writeAscii(view, 36, 'data')
+  view.setUint32(40, samples.length * bytesPerSample, true)
+
+  let offset = headerSize
+  for (const sample of samples) {
+    const clampedSample = clamp(sample, -1, 1)
+    view.setInt16(offset, clampedSample < 0 ? clampedSample * 0x8000 : clampedSample * 0x7fff, true)
+    offset += bytesPerSample
+  }
+
+  return new Blob([buffer], { type: 'audio/wav' })
+}
+
+function writeAscii(view: DataView, offset: number, value: string) {
+  for (let i = 0; i < value.length; i += 1) {
+    view.setUint8(offset + i, value.charCodeAt(i))
   }
 }
 

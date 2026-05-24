@@ -7,13 +7,14 @@ const app = express()
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 30 * 1024 * 1024,
+    fileSize: 8 * 1024 * 1024,
   },
 })
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const port = Number(process.env.PORT || 3001)
 const hfModel = process.env.HF_MODEL || 'gastonduault/music-classifier'
+const hfTimeoutMs = 35_000
 
 const genreAliases = {
   blues: 'Blues',
@@ -54,7 +55,10 @@ app.post('/api/genre', upload.single('audio'), async (request, response) => {
     return
   }
 
+  let timeout
   try {
+    const controller = new AbortController()
+    timeout = setTimeout(() => controller.abort(), hfTimeoutMs)
     const hfResponse = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
       method: 'POST',
       headers: {
@@ -62,6 +66,7 @@ app.post('/api/genre', upload.single('audio'), async (request, response) => {
         'Content-Type': request.file.mimetype || 'application/octet-stream',
       },
       body: request.file.buffer,
+      signal: controller.signal,
     })
 
     if (!hfResponse.ok) {
@@ -95,7 +100,10 @@ app.post('/api/genre', upload.single('audio'), async (request, response) => {
       labels: labels.map((item) => `${normalizeGenre(item.label)} ${(item.score * 100).toFixed(0)}%`),
     })
   } catch (error) {
-    response.status(500).json({ error: error instanceof Error ? error.message : 'Genre classification failed.' })
+    const isAbort = error instanceof DOMException && error.name === 'AbortError'
+    response.status(isAbort ? 504 : 500).json({ error: isAbort ? 'Hugging Face request timed out.' : error instanceof Error ? error.message : 'Genre classification failed.' })
+  } finally {
+    clearTimeout(timeout)
   }
 })
 
