@@ -26,7 +26,6 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<AnalysisResult | null>(null)
-  const [hfToken, setHfToken] = useState(() => sessionStorage.getItem('hf-token') ?? '')
 
   const fileMeta = useMemo(() => {
     if (!file) return null
@@ -56,8 +55,7 @@ function App() {
     setIsAnalyzing(true)
     setError('')
     try {
-      sessionStorage.setItem('hf-token', hfToken)
-      const nextResult = await analyzeAudioFile(file, { huggingFaceToken: hfToken })
+      const nextResult = await analyzeAudioFile(file, { useHuggingFace: true })
       setResult(nextResult)
     } catch (analysisError) {
       setError(analysisError instanceof Error ? analysisError.message : 'Could not analyze that audio file.')
@@ -132,17 +130,6 @@ function App() {
             </div>
           )}
 
-          <label className="api-field">
-            <span>Hugging Face token for genre/vibe</span>
-            <input
-              type="password"
-              value={hfToken}
-              onChange={(event) => setHfToken(event.target.value)}
-              placeholder="hf_..."
-              autoComplete="off"
-            />
-          </label>
-
           <div className="action-row">
             <button className="primary-action" onClick={runAnalysis} disabled={isAnalyzing || !file}>
               {isAnalyzing ? <LoaderCircle className="spin" aria-hidden="true" /> : <WandSparkles aria-hidden="true" />}
@@ -179,7 +166,7 @@ function Results({ result }: { result: AnalysisResult }) {
         <div>
           <span className="eyebrow">
             <BadgeCheck aria-hidden="true" />
-            {result.confidence}% confidence · {result.genreEngine}
+            {result.confidence}% confidence - {result.genreEngine}
           </span>
           <h2>{result.genre}</h2>
           <p>{result.mood} feel with {result.bassWeight}% low-end weight and {result.brightness}% brightness.</p>

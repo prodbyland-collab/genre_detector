@@ -173,27 +173,6 @@
   min-width: 0;
 }
 
-.api-field {
-  display: grid;
-  gap: 8px;
-}
-
-.api-field span {
-  color: #aeb8b3;
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-.api-field input {
-  width: 100%;
-  min-height: 46px;
-  padding: 0 14px;
-  border: 1px solid rgba(236, 239, 230, 0.14);
-  border-radius: 8px;
-  color: #f6f5ed;
-  background: rgba(255, 255, 255, 0.07);
-}
-
 .action-row {
   display: flex;
   flex-wrap: wrap;

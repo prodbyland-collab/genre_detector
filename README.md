@@ -7,9 +7,9 @@ A music analysis web app where users upload an audio file and get estimates for 
 - React + TypeScript + Vite frontend
 - Browser-only audio decoding through the Web Audio API
 - Essentia.js/WASM analysis for BPM and key detection
-- Optional Hugging Face API genre/vibe classification
+- Server-side Hugging Face API genre/vibe classification
 - Heuristic analysis for spectral brightness, bass weight, and artist matching
-- No uploaded audio leaves the user's browser
+- BPM/key analysis stays in the user's browser; genre/vibe audio is sent to your server endpoint and then Hugging Face
 
 The analysis layer is intentionally isolated in `src/audioAnalysis.ts` so it can be upgraded with a trained genre model, server-side Python pipeline, or external music intelligence API later.
 
@@ -19,19 +19,30 @@ Essentia.js is licensed under AGPL-3.0. Review the license before commercial dis
 
 ## Hugging Face Genre API
 
-Paste a Hugging Face token into the app to use the Hugging Face API for genre/vibe only. The token is stored in the current browser session and is not committed to the repo. Tempo and key still run locally with Essentia.js.
+Set `HF_TOKEN` in the server environment to use the Hugging Face API for genre/vibe only. The token never ships to the browser. Tempo and key still run locally with Essentia.js.
+
+Optional: set `HF_MODEL` to use a different audio classification model. The default is `gastonduault/music-classifier`.
 
 ## Run Locally
 
 ```bash
 npm install
-npm run dev
+HF_TOKEN=hf_your_token_here npm run dev
 ```
 
-## Build
+On Windows PowerShell:
+
+```powershell
+$env:HF_TOKEN="hf_your_token_here"; npm run dev
+```
+
+The Hugging Face token must be set as a server environment variable. Do not paste it into source code or commit it to GitHub.
+
+## Build And Run
 
 ```bash
 npm run build
+HF_TOKEN=hf_your_token_here npm start
 ```
 
 ## Next Upgrades

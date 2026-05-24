@@ -10,7 +10,6 @@ type HuggingFaceLabel = {
   score: number
 }
 
-const defaultModel = 'gastonduault/music-classifier'
 const genreAliases: Record<string, string> = {
   blues: 'Blues',
   classical: 'Classical',
@@ -38,29 +37,24 @@ const vibeByGenre: Record<string, string> = {
   Rock: 'driving',
 }
 
-export async function classifyGenreWithHuggingFace(file: File, token: string, model = defaultModel) {
-  const cleanToken = token.trim()
-  const cleanModel = model.trim() || defaultModel
+export async function classifyGenreWithHuggingFace(file: File) {
+  const formData = new FormData()
+  formData.append('audio', file)
 
-  if (!cleanToken) return null
-
-  const response = await fetch(`https://api-inference.huggingface.co/models/${cleanModel}`, {
+  const response = await fetch('/api/genre', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${cleanToken}`,
-      'Content-Type': file.type || 'application/octet-stream',
-    },
-    body: await file.arrayBuffer(),
+    body: formData,
   })
 
   if (!response.ok) {
-    const message = await response.text()
-    throw new Error(`Hugging Face genre request failed (${response.status}): ${message}`)
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null
+    throw new Error(payload?.error || `Genre request failed (${response.status}).`)
   }
 
-  const payload = (await response.json()) as HuggingFaceLabel[] | { error?: string }
+  const payload = (await response.json()) as HuggingFaceGenreResult | HuggingFaceLabel[] | { error?: string }
   if (!Array.isArray(payload)) {
-    throw new Error(payload.error || 'Hugging Face returned an unexpected genre response.')
+    if ('genre' in payload) return payload
+    throw new Error(payload.error || 'Genre API returned an unexpected response.')
   }
 
   const sortedLabels = payload
@@ -79,10 +73,6 @@ export async function classifyGenreWithHuggingFace(file: File, token: string, mo
     mood: vibeByGenre[genre] ?? 'balanced',
     labels: sortedLabels.map((item) => `${normalizeGenre(item.label)} ${(item.score * 100).toFixed(0)}%`),
   } satisfies HuggingFaceGenreResult
-}
-
-export function getDefaultHuggingFaceModel() {
-  return defaultModel
 }
 
 function normalizeGenre(label: string) {

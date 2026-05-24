@@ -35,8 +35,7 @@ type AudioFeatures = {
 }
 
 export type AnalyzeOptions = {
-  huggingFaceToken?: string
-  huggingFaceModel?: string
+  useHuggingFace?: boolean
 }
 
 type AudioContextConstructor = typeof AudioContext
@@ -87,10 +86,10 @@ export async function analyzeAudioFile(file: File, options: AnalyzeOptions = {})
 }
 
 async function classifyGenre(file: File, features: AudioFeatures, options: AnalyzeOptions) {
-  if (options.huggingFaceToken?.trim()) {
+  if (options.useHuggingFace) {
     try {
       const { classifyGenreWithHuggingFace } = await import('./huggingFaceGenre')
-      const hfResult = await classifyGenreWithHuggingFace(file, options.huggingFaceToken, options.huggingFaceModel)
+      const hfResult = await classifyGenreWithHuggingFace(file)
       if (hfResult) {
         return {
           genre: hfResult.genre,
