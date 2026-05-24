@@ -12,6 +12,8 @@ A music analysis web app where users upload an audio file and get estimates for 
 
 The analysis layer is intentionally isolated in `src/audioAnalysis.ts` so it can be upgraded with a trained genre model, server-side Python pipeline, or external music intelligence API later.
 
+Essentia's browser runtime is vendored in `public/vendor/essentia` so Bolt/Vite can serve the WASM files without resolving package internals.
+
 Essentia.js is licensed under AGPL-3.0. Review the license before commercial distribution.
 
 ## Run Locally
