@@ -386,6 +386,21 @@
   font-size: 1.25rem;
 }
 
+.metric em {
+  display: block;
+  margin-top: 6px;
+  color: #aeb8b3;
+  font-size: 0.8rem;
+  font-style: normal;
+}
+
+.accuracy-note {
+  margin: 0;
+  color: #aeb8b3;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .artist-section {
   padding-top: 4px;
 }

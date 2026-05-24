@@ -190,7 +190,7 @@ function Results({ result }: { result: AnalysisResult }) {
         <div>
           <span className="eyebrow">
             <BadgeCheck aria-hidden="true" />
-            {result.confidence}% confidence - {result.genreEngine}
+            {result.confidence}% genre confidence - {result.genreEngine}
           </span>
           <h2>{result.genre}</h2>
           <p>{result.mood} feel with {result.bassWeight}% low-end weight and {result.brightness}% brightness.</p>
@@ -203,11 +203,15 @@ function Results({ result }: { result: AnalysisResult }) {
       <Waveform values={result.waveform} />
 
       <div className="metrics-grid">
-        <Metric icon={<CircleGauge />} label="Tempo" value={`${result.tempo} BPM`} />
-        <Metric icon={<KeyRound />} label="Key" value={result.key} />
+        <Metric icon={<CircleGauge />} label="Tempo estimate" value={`${result.tempo} BPM`} subvalue={`${result.tempoConfidence}% confidence`} />
+        <Metric icon={<KeyRound />} label="Key estimate" value={result.key} subvalue={`${result.keyConfidence}% confidence`} />
         <Metric icon={<Sparkles />} label="Energy" value={`${result.energy}%`} />
         <Metric icon={<AudioLines />} label="Dance" value={`${result.danceability}%`} />
       </div>
+
+      <p className="accuracy-note">
+        Tempo and key are local estimates. For release-grade accuracy, connect a dedicated music analysis provider or server-side MIR model.
+      </p>
 
       {result.genreLabels.length > 0 && (
         <div className="label-row">
@@ -220,22 +224,26 @@ function Results({ result }: { result: AnalysisResult }) {
       <section className="artist-section">
         <div className="section-title">
           <UserRoundSearch aria-hidden="true" />
-          <h3>Artist fit</h3>
+          <h3>Artist direction</h3>
         </div>
-        <div className="artist-list">
-          {result.artists.map((artist) => (
-            <article className="artist-card" key={artist.name}>
-              <div>
-                <strong>{artist.name}</strong>
-                <span>{artist.lane}</span>
-              </div>
-              <div className="fit-meter" aria-label={`${artist.fit}% fit`}>
-                <span style={{ width: `${artist.fit}%` }} />
-              </div>
-              <p>{artist.reason}</p>
-            </article>
-          ))}
-        </div>
+        {result.artists.length > 0 ? (
+          <div className="artist-list">
+            {result.artists.map((artist) => (
+              <article className="artist-card" key={artist.name}>
+                <div>
+                  <strong>{artist.name}</strong>
+                  <span>{artist.lane}</span>
+                </div>
+                <div className="fit-meter" aria-label={`${artist.fit}% directional match`}>
+                  <span style={{ width: `${artist.fit}%` }} />
+                </div>
+                <p>{artist.reason}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="accuracy-note">Artist direction is hidden because genre confidence is too low for a useful match.</p>
+        )}
       </section>
     </div>
   )
@@ -251,12 +259,13 @@ function Waveform({ values }: { values: number[] }) {
   )
 }
 
-function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function Metric({ icon, label, value, subvalue }: { icon: React.ReactNode; label: string; value: string; subvalue?: string }) {
   return (
     <div className="metric">
       <div className="metric-icon">{icon}</div>
       <span>{label}</span>
       <strong>{value}</strong>
+      {subvalue && <em>{subvalue}</em>}
     </div>
   )
 }

@@ -10,6 +10,8 @@ export type AnalysisResult = {
   confidence: number
   tempo: number
   key: string
+  tempoConfidence: number
+  keyConfidence: number
   energy: number
   danceability: number
   mood: string
@@ -25,6 +27,8 @@ export type AnalysisResult = {
 type AudioFeatures = {
   tempo: number
   key: string
+  tempoConfidence: number
+  keyConfidence: number
   energy: number
   danceability: number
   brightness: number
@@ -230,10 +234,13 @@ async function extractFeatures(samples: Float32Array, sampleRate: number, option
   const tempo = estimateTempo(energies, targetRate / hop)
   const dynamicRange = clamp(Math.round((percentile(energies, 0.9) - percentile(energies, 0.2)) * 220), 0, 100)
   const danceability = clamp(Math.round(100 - Math.abs(tempo - 118) * 0.8 + bassWeight * 0.18 - dynamicRange * 0.1), 0, 100)
+  const key = estimateKey(downsampled, targetRate)
 
   return {
     tempo,
-    key: estimateKey(downsampled, targetRate),
+    key,
+    tempoConfidence: 42,
+    keyConfidence: 35,
     energy,
     danceability,
     brightness,
@@ -359,6 +366,10 @@ function classifyTrack(features: AudioFeatures) {
 }
 
 function matchArtists(features: AudioFeatures, genreResult: GenreResult): ArtistMatch[] {
+  if (genreResult.confidence < 60) {
+    return []
+  }
+
   return artistProfiles
     .map((artist) => {
       const genreBoost = artist.genres.includes(genreResult.genre) ? 24 : hasRelatedGenre(artist.genres, genreResult.genre) ? 10 : -12

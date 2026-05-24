@@ -1,6 +1,6 @@
 # Genre Detector
 
-A music analysis web app where users upload an audio file and get estimates for genre, tempo, key, energy, danceability, and artists who fit the same vibe.
+A music analysis web app where users upload an audio file and get prototype estimates for genre, tempo, key, energy, danceability, and artist direction.
 
 ## Current Version
 
@@ -10,6 +10,8 @@ A music analysis web app where users upload an audio file and get estimates for 
 - Server-side Hugging Face API genre/vibe classification
 - Heuristic analysis for spectral brightness, bass weight, and artist matching
 - BPM/key analysis stays in the user's browser; genre/vibe audio is sent to your server endpoint and then Hugging Face
+
+Tempo, key, and artist direction are not release-grade music intelligence yet. They are prototype estimates. For production accuracy, replace those parts with a dedicated MIR backend or commercial music analysis API.
 
 The analysis layer is intentionally isolated in `src/audioAnalysis.ts` so it can be upgraded with a trained genre model, server-side Python pipeline, or external music intelligence API later.
 
@@ -43,6 +45,8 @@ HF_TOKEN=hf_your_token_here npm start
 
 ## Next Upgrades
 
+- Replace prototype BPM/key with a real music information retrieval backend
+- Replace artist direction with embedding-based similarity or a curated labeled catalog
 - Add authenticated upload history
 - Add server-side stem/feature extraction
 - Train or integrate a genre classifier
