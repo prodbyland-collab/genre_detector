@@ -166,7 +166,7 @@ function Results({ result }: { result: AnalysisResult }) {
         <div>
           <span className="eyebrow">
             <BadgeCheck aria-hidden="true" />
-            {result.confidence}% confidence
+            {result.confidence}% confidence · {result.engine}
           </span>
           <h2>{result.genre}</h2>
           <p>{result.mood} feel with {result.bassWeight}% low-end weight and {result.brightness}% brightness.</p>

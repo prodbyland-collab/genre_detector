@@ -15,6 +15,7 @@ export type AnalysisResult = {
   mood: string
   brightness: number
   bassWeight: number
+  engine: string
   waveform: number[]
   artists: ArtistMatch[]
 }
@@ -27,6 +28,7 @@ type AudioFeatures = {
   brightness: number
   bassWeight: number
   dynamicRange: number
+  engine: string
   waveform: number[]
 }
 
@@ -65,7 +67,7 @@ export async function analyzeAudioFile(file: File): Promise<AnalysisResult> {
     const arrayBuffer = await file.arrayBuffer()
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
     const mono = mixToMono(audioBuffer)
-    const features = extractFeatures(mono, audioBuffer.sampleRate)
+    const features = await extractFeatures(mono, audioBuffer.sampleRate)
     return {
       ...features,
       ...classifyTrack(features),
@@ -91,7 +93,7 @@ function mixToMono(buffer: AudioBuffer) {
   return mono
 }
 
-function extractFeatures(samples: Float32Array, sampleRate: number): AudioFeatures {
+async function extractFeatures(samples: Float32Array, sampleRate: number): Promise<AudioFeatures> {
   const targetRate = 11_025
   const downsampled = downsample(samples, sampleRate, targetRate)
   const frameSize = 1024
@@ -127,19 +129,65 @@ function extractFeatures(samples: Float32Array, sampleRate: number): AudioFeatur
   const energy = clamp(Math.round(rms * 240), 0, 100)
   const brightness = clamp(Math.round(normalize(average(centroids), 300, 4200) * 100), 0, 100)
   const bassWeight = clamp(Math.round(average(bassRatios) * 100), 0, 100)
-  const tempo = estimateTempo(energies, targetRate / hop)
+  const fallbackTempo = estimateTempo(energies, targetRate / hop)
   const dynamicRange = clamp(Math.round((percentile(energies, 0.9) - percentile(energies, 0.2)) * 220), 0, 100)
+  const essentiaAnalysis = await analyzeWithEssentia(samples, sampleRate)
+  const tempo = essentiaAnalysis.tempo || fallbackTempo
   const danceability = clamp(Math.round(100 - Math.abs(tempo - 118) * 0.8 + bassWeight * 0.18 - dynamicRange * 0.1), 0, 100)
 
   return {
     tempo,
-    key: estimateKey(downsampled, targetRate),
+    key: essentiaAnalysis.key || estimateKey(downsampled, targetRate),
     energy,
     danceability,
     brightness,
     bassWeight,
     dynamicRange,
+    engine: essentiaAnalysis.engine,
     waveform: buildWaveform(samples, 96),
+  }
+}
+
+async function analyzeWithEssentia(samples: Float32Array, sampleRate: number) {
+  try {
+    const { getEssentia } = await import('./essentiaClient')
+    const essentia = await getEssentia()
+    const vector = essentia.arrayToVector(samples) as { delete?: () => void }
+    try {
+      const rhythm = essentia.RhythmExtractor2013(vector, 208, 'multifeature', 40)
+      const key = essentia.KeyExtractor(
+        vector,
+        true,
+        4096,
+        4096,
+        12,
+        3500,
+        60,
+        25,
+        0.2,
+        'edma',
+        sampleRate,
+        0.0001,
+        440,
+        'cosine',
+        'hann',
+      )
+      const keyName = key.key && key.scale ? `${key.key} ${key.scale}` : ''
+      return {
+        tempo: normalizeTempo(Math.round(rhythm.bpm ?? 0)),
+        key: keyName,
+        engine: 'Essentia.js',
+      }
+    } finally {
+      vector.delete?.()
+    }
+  } catch (error) {
+    console.warn('Essentia.js analysis failed, using fallback analysis.', error)
+    return {
+      tempo: 0,
+      key: '',
+      engine: 'Fallback DSP',
+    }
   }
 }
 
@@ -167,6 +215,13 @@ function estimateTempo(energies: number[], framesPerSecond: number) {
   if (bestBpm < 85) return bestBpm * 2
   if (bestBpm > 165) return Math.round(bestBpm / 2)
   return bestBpm
+}
+
+function normalizeTempo(bpm: number) {
+  if (!Number.isFinite(bpm) || bpm <= 0) return 0
+  if (bpm < 85) return bpm * 2
+  if (bpm > 170) return Math.round(bpm / 2)
+  return bpm
 }
 
 function estimateKey(samples: Float32Array, sampleRate: number) {
