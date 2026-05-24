@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), Inter, sans-serif;
+  --font-display: var(--font-display), "Space Grotesk", sans-serif;
+  --color-background: #070a0f;
+  --color-foreground: #f7f3ea;
+  --color-muted-foreground: #a7adb8;
+  --color-primary: #25f4b4;
+  --color-primary-foreground: #03110d;
+  --color-secondary: #171d27;
+  --color-secondary-foreground: #f7f3ea;
+  --color-gold: #ffd166;
+  --color-coral: #ff6b6b;
+  --shadow-glow: 0 0 42px rgba(37, 244, 180, 0.25);
+}
+
+:root {
+  --background: #070a0f;
+  --foreground: #f7f3ea;
+  --muted: #a7adb8;
+  --panel: rgba(12, 17, 25, 0.76);
+  --border: rgba(255, 255, 255, 0.12);
+  --primary: #25f4b4;
+  --accent: #7c3aed;
+  --warning: #ffd166;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--foreground);
+  background:
+    radial-gradient(circle at 20% 10%, rgba(37, 244, 180, 0.18), transparent 28rem),
+    radial-gradient(circle at 85% 20%, rgba(124, 58, 237, 0.22), transparent 32rem),
+    linear-gradient(180deg, #070a0f 0%, #0a111b 44%, #05070c 100%);
+  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.glass {
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, rgba(12, 17, 25, 0.82), rgba(12, 17, 25, 0.52));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(18px);
+}
+
+.wave-grid {
+  background-image:
+    linear-gradient(rgba(37, 244, 180, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 209, 102, 0.09) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to top, black, transparent);
+}
+
+.noise {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.16;
+  background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+  background-size: 42px 42px;
+}
+
+.wave-bar {
+  transform-origin: bottom;
+  animation: wave 1.5s ease-in-out infinite;
+}
+
+@keyframes wave {
+  0%, 100% { transform: scaleY(.35); }
+  50% { transform: scaleY(1); }
+}

@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  name          String?
+  avatarUrl     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  uploads       Upload[]
+  analyses      Analysis[]
+  subscription  Subscription?
+  apiUsage      ApiUsage[]
+  creditLedger  CreditLedger[]
+}
+
+model Upload {
+  id          String     @id @default(uuid())
+  userId      String
+  fileName    String
+  filePath    String
+  mimeType    String
+  sizeBytes   Int
+  durationSec Float?
+  status      UploadStatus @default(PENDING)
+  createdAt   DateTime   @default(now())
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analysis    Analysis?
+
+  @@index([userId, createdAt])
+}
+
+model Analysis {
+  id            String      @id @default(uuid())
+  userId        String
+  uploadId      String      @unique
+  bpm           Float
+  musicalKey    String
+  energy        Float
+  genres        Json
+  mood          String[]
+  artists       Json
+  vocalStyles   String[]
+  explanation   String
+  rawFeatures   Json?
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  upload        Upload      @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  shareLinks    ShareLink[]
+
+  @@index([userId, createdAt])
+}
+
+model ShareLink {
+  id          String    @id @default(uuid())
+  analysisId  String
+  slug        String    @unique
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  analysis    Analysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id                 String             @id @default(uuid())
+  userId             String             @unique
+  stripeCustomerId   String?
+  stripeSubscription String?
+  plan               SubscriptionPlan   @default(FREE)
+  status             SubscriptionStatus @default(ACTIVE)
+  creditsMonthly     Int                @default(5)
+  currentPeriodEnd   DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ApiUsage {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  credits   Int      @default(1)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model CreditLedger {
+  id        String   @id @default(uuid())
+  userId    String
+  delta     Int
+  reason    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+enum UploadStatus {
+  PENDING
+  PROCESSING
+  COMPLETE
+  FAILED
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRODUCER
+  STUDIO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+}
