@@ -57,7 +57,6 @@ const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', '
 const analysisStartSeconds = 20
 const analysisDurationSeconds = 55
 const genreSnippetSeconds = 30
-const essentiaTempoSeconds = 12
 
 const artistProfiles = [
   { name: 'Drake', lane: 'melodic rap', tempo: 82, energy: 46, brightness: 42, bass: 64 },
@@ -196,11 +195,9 @@ async function extractFeatures(samples: Float32Array, sampleRate: number, option
   const energy = clamp(Math.round(rms * 240), 0, 100)
   const brightness = clamp(Math.round(normalize(average(centroids), 300, 4200) * 100), 0, 100)
   const bassWeight = clamp(Math.round(average(bassRatios) * 100), 0, 100)
-  const fallbackTempo = estimateTempo(energies, targetRate / hop)
+  reportProgress(options, 58, 'Estimating tempo', 'Finding rhythmic pulse with the fast local analyzer')
+  const tempo = estimateTempo(energies, targetRate / hop)
   const dynamicRange = clamp(Math.round((percentile(energies, 0.9) - percentile(energies, 0.2)) * 220), 0, 100)
-  reportProgress(options, 58, 'Running Essentia.js', 'Estimating tempo with a quick rhythm pass')
-  const essentiaAnalysis = await analyzeWithEssentia(samples, sampleRate)
-  const tempo = essentiaAnalysis.tempo || fallbackTempo
   const danceability = clamp(Math.round(100 - Math.abs(tempo - 118) * 0.8 + bassWeight * 0.18 - dynamicRange * 0.1), 0, 100)
 
   return {
@@ -211,34 +208,8 @@ async function extractFeatures(samples: Float32Array, sampleRate: number, option
     brightness,
     bassWeight,
     dynamicRange,
-    engine: essentiaAnalysis.engine,
+    engine: 'Fast local DSP',
     waveform: buildWaveform(samples, 96),
-  }
-}
-
-async function analyzeWithEssentia(samples: Float32Array, sampleRate: number) {
-  try {
-    const { getEssentia } = await import('./essentiaClient')
-    const essentia = await getEssentia()
-    const tempoSamples = sliceByDuration(samples, sampleRate, essentiaTempoSeconds)
-    const vector = essentia.arrayToVector(tempoSamples) as { delete?: () => void }
-    try {
-      const rhythm = essentia.RhythmExtractor2013(vector, 208, 'multifeature', 40)
-      return {
-        tempo: normalizeTempo(Math.round(rhythm.bpm ?? 0)),
-        key: '',
-        engine: 'Essentia.js BPM',
-      }
-    } finally {
-      vector.delete?.()
-    }
-  } catch (error) {
-    console.warn('Essentia.js analysis failed, using fallback analysis.', error)
-    return {
-      tempo: 0,
-      key: '',
-      engine: 'Fallback DSP',
-    }
   }
 }
 
@@ -302,13 +273,6 @@ function estimateTempo(energies: number[], framesPerSecond: number) {
   if (bestBpm < 85) return bestBpm * 2
   if (bestBpm > 165) return Math.round(bestBpm / 2)
   return bestBpm
-}
-
-function normalizeTempo(bpm: number) {
-  if (!Number.isFinite(bpm) || bpm <= 0) return 0
-  if (bpm < 85) return bpm * 2
-  if (bpm > 170) return Math.round(bpm / 2)
-  return bpm
 }
 
 function estimateKey(samples: Float32Array, sampleRate: number) {

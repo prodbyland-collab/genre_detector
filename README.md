@@ -6,20 +6,16 @@ A music analysis web app where users upload an audio file and get estimates for 
 
 - React + TypeScript + Vite frontend
 - Browser-only audio decoding through the Web Audio API
-- Essentia.js/WASM analysis for BPM and key detection
+- Fast browser-local DSP analysis for BPM and key detection
 - Server-side Hugging Face API genre/vibe classification
 - Heuristic analysis for spectral brightness, bass weight, and artist matching
 - BPM/key analysis stays in the user's browser; genre/vibe audio is sent to your server endpoint and then Hugging Face
 
 The analysis layer is intentionally isolated in `src/audioAnalysis.ts` so it can be upgraded with a trained genre model, server-side Python pipeline, or external music intelligence API later.
 
-Essentia's browser runtime is vendored in `public/vendor/essentia` so Bolt/Vite can serve the WASM files without resolving package internals.
-
-Essentia.js is licensed under AGPL-3.0. Review the license before commercial distribution.
-
 ## Hugging Face Genre API
 
-Set `HF_TOKEN` in the server environment to use the Hugging Face API for genre/vibe only. The token never ships to the browser. Tempo and key still run locally with Essentia.js.
+Set `HF_TOKEN` in the server environment to use the Hugging Face API for genre/vibe only. The token never ships to the browser. Tempo and key still run locally in the browser.
 
 Optional: set `HF_MODEL` to use a different audio classification model. The default is `gastonduault/music-classifier`.
 
