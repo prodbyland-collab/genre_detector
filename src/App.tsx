@@ -58,7 +58,7 @@ function App() {
     setError('')
     try {
       const nextResult = await analyzeAudioFile(file, {
-        useHuggingFace: true,
+        useBeatlyze: true,
         onProgress: setProgress,
       })
       setProgress({ percent: 100, stage: 'Analysis complete', detail: 'Rendering results' })
@@ -193,7 +193,7 @@ function Results({ result }: { result: AnalysisResult }) {
             {result.confidence}% genre confidence - {result.genreEngine}
           </span>
           <h2>{result.genre}</h2>
-          <p>{result.mood} feel with {result.bassWeight}% low-end weight and {result.brightness}% brightness.</p>
+          <p>{result.mood} feel with {result.tempo} BPM, {result.key}, and {result.danceability}% danceability.</p>
         </div>
         <div className="genre-disc" aria-hidden="true">
           <Music2 />
@@ -210,7 +210,7 @@ function Results({ result }: { result: AnalysisResult }) {
       </div>
 
       <p className="accuracy-note">
-        Tempo and key are local estimates. For release-grade accuracy, connect a dedicated music analysis provider or server-side MIR model.
+        Tempo, key, energy, danceability, genre, and mood come from {result.engine}. Artist direction is still a directional match, not a verified collaboration prediction.
       </p>
 
       {result.genreLabels.length > 0 && (

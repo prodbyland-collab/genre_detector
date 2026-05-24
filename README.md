@@ -6,49 +6,46 @@ A music analysis web app where users upload an audio file and get prototype esti
 
 - React + TypeScript + Vite frontend
 - Browser-only audio decoding through the Web Audio API
-- Fast browser-local DSP analysis for BPM and key detection
+- Beatlyze API analysis for BPM, key, loudness, energy, danceability, mood, and genre
 - Server-side Hugging Face API genre/vibe classification
-- Heuristic analysis for spectral brightness, bass weight, and artist matching
-- BPM/key analysis stays in the user's browser; genre/vibe audio is sent to your server endpoint and then Hugging Face
+- Directional artist matching from provider metadata
 
-Tempo, key, and artist direction are not release-grade music intelligence yet. They are prototype estimates. For production accuracy, replace those parts with a dedicated MIR backend or commercial music analysis API.
+Beatlyze is the primary analysis provider. The app sends uploads to your server, your server calls Beatlyze with `BEATLYZE_API_KEY`, and users never see the API key.
 
 The analysis layer is intentionally isolated in `src/audioAnalysis.ts` so it can be upgraded with a trained genre model, server-side Python pipeline, or external music intelligence API later.
 
 ## Hugging Face Genre API
 
-Set `HF_TOKEN` in the server environment to use the Hugging Face API for genre/vibe only. The token never ships to the browser. Tempo and key still run locally in the browser.
+Set `BEATLYZE_API_KEY` in the server environment to use real provider analysis. The token never ships to the browser.
 
-Optional: set `HF_MODEL` to use a different audio classification model. The default is `gastonduault/music-classifier`.
+Optional: `HF_TOKEN` and `HF_MODEL` are still available for fallback experiments, but Beatlyze is the real analysis path.
 
 ## Run Locally
 
 ```bash
 npm install
-HF_TOKEN=hf_your_token_here npm run dev
+BEATLYZE_API_KEY=bz_your_key_here npm run dev
 ```
 
 On Windows PowerShell:
 
 ```powershell
-$env:HF_TOKEN="hf_your_token_here"; npm run dev
+$env:BEATLYZE_API_KEY="bz_your_key_here"; npm run dev
 ```
 
-The Hugging Face token must be set as a server environment variable. Do not paste it into source code or commit it to GitHub.
+The Beatlyze key must be set as a server environment variable. Do not paste it into source code or commit it to GitHub.
 
 ## Build And Run
 
 ```bash
 npm run build
-HF_TOKEN=hf_your_token_here npm start
+BEATLYZE_API_KEY=bz_your_key_here npm start
 ```
 
 ## Next Upgrades
 
-- Replace prototype BPM/key with a real music information retrieval backend
-- Replace artist direction with embedding-based similarity or a curated labeled catalog
+- Add Cyanite or another similarity provider for real artist/track similarity
 - Add authenticated upload history
 - Add server-side stem/feature extraction
-- Train or integrate a genre classifier
 - Expand artist matching by region, language, vocal range, and lyrical lane
 - Add shareable result pages for producers and collaborators

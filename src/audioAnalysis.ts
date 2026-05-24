@@ -58,6 +58,7 @@ type ArtistProfile = {
 }
 
 export type AnalyzeOptions = {
+  useBeatlyze?: boolean
   useHuggingFace?: boolean
   onProgress?: (progress: AnalysisProgress) => void
 }
@@ -80,6 +81,7 @@ const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', '
 const analysisStartSeconds = 20
 const analysisDurationSeconds = 55
 const genreSnippetSeconds = 30
+const beatlyzeMaxUploadBytes = 50 * 1024 * 1024
 
 const artistProfiles: ArtistProfile[] = [
   { name: 'Drake', lane: 'melodic rap / R&B rap', genres: ['Hip-Hop / Rap', 'R&B', 'Trap'], moods: ['moody', 'balanced', 'rhythmic'], tempo: 82, energy: 46, brightness: 42, bass: 64 },
@@ -109,6 +111,10 @@ const artistProfiles: ArtistProfile[] = [
 ]
 
 export async function analyzeAudioFile(file: File, options: AnalyzeOptions = {}): Promise<AnalysisResult> {
+  if (options.useBeatlyze) {
+    return analyzeAudioFileWithBeatlyze(file, options)
+  }
+
   const AudioContextClass = window.AudioContext || window.webkitAudioContext
   if (!AudioContextClass) {
     throw new Error('This browser does not support Web Audio analysis.')
@@ -133,6 +139,86 @@ export async function analyzeAudioFile(file: File, options: AnalyzeOptions = {})
       ...genreResult,
       artists: matchArtists(features, genreResult),
     }
+  } finally {
+    await audioContext.close()
+  }
+}
+
+async function analyzeAudioFileWithBeatlyze(file: File, options: AnalyzeOptions): Promise<AnalysisResult> {
+  if (file.size > beatlyzeMaxUploadBytes) {
+    throw new Error('Real analysis supports uploads up to 50 MB. Convert this WAV to MP3/M4A or upload a smaller file.')
+  }
+
+  reportProgress(options, 5, 'Uploading audio', 'Sending the track to the analysis provider')
+  const formData = new FormData()
+  formData.append('audio', file)
+
+  reportProgress(options, 35, 'Provider analysis', 'Beatlyze is detecting tempo, key, mood, energy, and genre')
+  const response = await fetch('/api/analyze', {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null
+    throw new Error(payload?.error || `Analysis provider failed (${response.status}).`)
+  }
+
+  reportProgress(options, 82, 'Rendering results', 'Building waveform and artist direction')
+  const provider = (await response.json()) as {
+    provider: string
+    genre: string
+    confidence: number
+    tempo: number
+    tempoConfidence: number
+    key: string
+    keyConfidence: number
+    energy: number
+    danceability: number
+    mood: string
+    genreLabels: string[]
+    moodLabels?: string[]
+  }
+
+  const waveform = await extractWaveform(file)
+  const features: AudioFeatures = {
+    tempo: provider.tempo,
+    key: provider.key,
+    tempoConfidence: provider.tempoConfidence,
+    keyConfidence: provider.keyConfidence,
+    energy: provider.energy,
+    danceability: provider.danceability,
+    brightness: 0,
+    bassWeight: 0,
+    dynamicRange: 0,
+    engine: provider.provider,
+    waveform,
+  }
+  const genreResult: GenreResult = {
+    genre: provider.genre,
+    confidence: provider.confidence,
+    mood: provider.mood,
+    genreEngine: provider.provider,
+    genreLabels: [...provider.genreLabels, ...(provider.moodLabels ?? [])],
+  }
+
+  return {
+    ...features,
+    ...genreResult,
+    artists: matchArtists(features, genreResult),
+  }
+}
+
+async function extractWaveform(file: File) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextClass) return []
+
+  const audioContext = new AudioContextClass()
+  try {
+    const audioBuffer = await audioContext.decodeAudioData(await file.arrayBuffer())
+    return buildWaveform(sliceForAnalysis(mixToMono(audioBuffer), audioBuffer.sampleRate), 96)
+  } catch {
+    return []
   } finally {
     await audioContext.close()
   }
